@@ -2,5 +2,3 @@ streamlit
 streamlit-chat
 python-dotenv
 requests
-transformers
-torch
