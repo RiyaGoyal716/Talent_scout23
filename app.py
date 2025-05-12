@@ -19,11 +19,12 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 try:
     hf_model = pipeline(
         "text-generation",
-        model="mistralai/Mistral-7B-Instruct-v0.1",
+        model="sshleifer/tiny-gpt2",
         device=0 if torch.cuda.is_available() else -1,
-        max_new_tokens=250
+        max_new_tokens=150
     )
-except:
+except Exception as err:
+    print("Local model load error:", err)
     hf_model = None
 
 # ----------------------------
@@ -93,7 +94,7 @@ if "end_chat" not in st.session_state:
     st.session_state.end_chat = False
 
 # ----------------------------
-# Groq + Hugging Face LLM API Wrapper
+# LLM Response (Groq + HF fallback)
 # ----------------------------
 def generate_llm_response(prompt):
     try:
@@ -114,20 +115,25 @@ def generate_llm_response(prompt):
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]
     except Exception as e:
+        print("Groq failed:", e)
         if hf_model:
-            return hf_model(prompt)[0]["generated_text"]
-        else:
-            return "⚠️ Sorry, no model is available right now."
+            try:
+                result = hf_model(prompt)[0]["generated_text"]
+                return result
+            except Exception as fallback_err:
+                print("HF fallback failed:", fallback_err)
+                return "⚠️ Local fallback failed too."
+        return "⚠️ No model available right now."
 
 # ----------------------------
 # Tech Question Generator
 # ----------------------------
 def get_technical_questions(tech_stack):
-    prompt = f"""You are an AI recruiter. Generate 3 concise technical questions EACH for the following technologies:\n{tech_stack}."""
+    prompt = f"""You are an AI recruiter. Generate 3 simple technical questions for:\n{tech_stack}."""
     return generate_llm_response(prompt)
 
 # ----------------------------
-# Conversation Flow Logic
+# Chat Logic
 # ----------------------------
 def chat_logic(user_input):
     info = st.session_state.candidate_info
@@ -186,7 +192,7 @@ def chat_logic(user_input):
         return "❓ Hmm, I didn’t quite get that. Could you please rephrase?"
 
 # ----------------------------
-# Show Chat Interface
+# Chat Display
 # ----------------------------
 with st.container():
     for i, msg in enumerate(st.session_state.messages):
