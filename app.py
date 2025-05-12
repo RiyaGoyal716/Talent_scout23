@@ -24,9 +24,6 @@ st.markdown("""
     body {
         background-color: #f5f7fa;
     }
-    .st-emotion-cache-1avcm0n {
-        padding-top: 1rem;
-    }
     .stChatInputContainer {
         background: #fff;
         border-top: 2px solid #ccc;
@@ -103,18 +100,19 @@ def generate_llm_response(prompt):
         return "⚠️ Groq API request failed. Please check your API key or try again later."
 
 # ----------------------------
-# Tech Question Generator
+# Generate 9 Tiered Questions
 # ----------------------------
 def get_technical_questions(tech_stack):
-    prompt = f"""You are an expert technical interviewer. For each technology listed below, generate 3 clear and concise interview questions suitable for an experienced candidate.
+    prompt = f"""
+You are an expert technical interviewer.
 
-Technologies: {tech_stack}
+Generate 3 basic, 3 intermediate, and 3 advanced (pro-level) coding interview questions for the following technologies:
+{tech_stack}
 
 Format:
-Technology: <name>
-1. Question
-2. Question
-3. Question
+[Basic] ...
+[Intermediate] ...
+[Advanced] ...
 """
     return generate_llm_response(prompt)
 
@@ -165,14 +163,16 @@ def chat_logic(user_input):
 
     elif stage == "tech_stack":
         info["Tech Stack"] = user_input
-        st.session_state.stage = "questioning"
+        st.session_state.stage = "answering"
         tech_q = get_technical_questions(user_input)
         st.session_state.tech_questions = tech_q.split("\n")
-        return f"🧪 Here are some questions based on your tech stack:\n\n{tech_q}"
+        return f"🧪 Here are 9 questions based on your tech stack:\n\n{tech_q}\n\n👉 Reply with anything to see the answers."
 
-    elif stage == "questioning":
+    elif stage == "answering":
         st.session_state.stage = "done"
-        return "✅ That’s all I need for now. Thank you for your time! You’ll hear from us soon. 🙏"
+        questions = "\n".join(st.session_state.tech_questions)
+        prompt = f"""You are a senior software engineer. Provide accurate and concise answers to the following questions:\n\n{questions}"""
+        return generate_llm_response(prompt)
 
     else:
         return "❓ Hmm, I didn’t quite get that. Could you please rephrase?"
