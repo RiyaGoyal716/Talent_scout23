@@ -1,34 +1,10 @@
 import streamlit as st
 from streamlit_chat import message
-import os
-import requests
+import ollama
 import time
-from dotenv import load_dotenv
-from transformers import pipeline
-import torch
 
 # ----------------------------
-# Load environment variables
-# ----------------------------
-load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-# ----------------------------
-# Load Hugging Face fallback model
-# ----------------------------
-try:
-    hf_model = pipeline(
-        "text-generation",
-        model="sshleifer/tiny-gpt2",
-        device=0 if torch.cuda.is_available() else -1,
-        max_new_tokens=150
-    )
-except Exception as err:
-    print("Local model load error:", err)
-    hf_model = None
-
-# ----------------------------
-# Streamlit Page Configuration
+# Set Custom Page Config
 # ----------------------------
 st.set_page_config(page_title="TalentScout AI - Hiring Assistant", page_icon="🧠", layout="centered")
 
@@ -80,7 +56,7 @@ st.markdown("## 🧠 TalentScout AI Assistant")
 st.caption("Your intelligent virtual recruiter for smarter hiring decisions.")
 
 # ----------------------------
-# State Initialization
+# State Init
 # ----------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -94,46 +70,22 @@ if "end_chat" not in st.session_state:
     st.session_state.end_chat = False
 
 # ----------------------------
-# LLM Response (Groq + HF fallback)
+# LLM API Wrapper
 # ----------------------------
 def generate_llm_response(prompt):
-    try:
-        with st.spinner("Thinking..."):
-            headers = {
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": "llama3-8b-8192",
-                "messages": [{"role": "user", "content": prompt}]
-            }
-            response = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers=headers,
-                json=payload
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
-    except Exception as e:
-        print("Groq failed:", e)
-        if hf_model:
-            try:
-                result = hf_model(prompt)[0]["generated_text"]
-                return result
-            except Exception as fallback_err:
-                print("HF fallback failed:", fallback_err)
-                return "⚠️ Local fallback failed too."
-        return "⚠️ No model available right now."
+    with st.spinner("Thinking..."):
+        response = ollama.chat(model="mistral", messages=[{"role": "user", "content": prompt}])
+        return response["message"]["content"]
 
 # ----------------------------
 # Tech Question Generator
 # ----------------------------
 def get_technical_questions(tech_stack):
-    prompt = f"""You are an AI recruiter. Generate 3 simple technical questions for:\n{tech_stack}."""
+    prompt = f"""You are an AI recruiter. Generate 3 concise technical questions EACH for the following technologies:\n{tech_stack}."""
     return generate_llm_response(prompt)
 
 # ----------------------------
-# Chat Logic
+# Conversation Flow Logic
 # ----------------------------
 def chat_logic(user_input):
     info = st.session_state.candidate_info
@@ -192,7 +144,7 @@ def chat_logic(user_input):
         return "❓ Hmm, I didn’t quite get that. Could you please rephrase?"
 
 # ----------------------------
-# Chat Display
+# Show Chat Interface
 # ----------------------------
 with st.container():
     for i, msg in enumerate(st.session_state.messages):
