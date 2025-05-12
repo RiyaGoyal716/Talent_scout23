@@ -1,10 +1,18 @@
 import streamlit as st
 from streamlit_chat import message
-import ollama
+import os
+import requests
 import time
+from dotenv import load_dotenv
 
 # ----------------------------
-# Set Custom Page Config
+# Load environment variables
+# ----------------------------
+load_dotenv()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+# ----------------------------
+# Streamlit Page Configuration
 # ----------------------------
 st.set_page_config(page_title="TalentScout AI - Hiring Assistant", page_icon="🧠", layout="centered")
 
@@ -56,7 +64,7 @@ st.markdown("## 🧠 TalentScout AI Assistant")
 st.caption("Your intelligent virtual recruiter for smarter hiring decisions.")
 
 # ----------------------------
-# State Init
+# State Initialization
 # ----------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -70,22 +78,48 @@ if "end_chat" not in st.session_state:
     st.session_state.end_chat = False
 
 # ----------------------------
-# LLM API Wrapper
+# LLM Response (Groq only)
 # ----------------------------
 def generate_llm_response(prompt):
-    with st.spinner("Thinking..."):
-        response = ollama.chat(model="mistral", messages=[{"role": "user", "content": prompt}])
-        return response["message"]["content"]
+    try:
+        with st.spinner("Thinking..."):
+            headers = {
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "llama3-8b-8192",
+                "messages": [{"role": "user", "content": prompt}]
+            }
+            response = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers=headers,
+                json=payload
+            )
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        print("Groq error:", e)
+        return "⚠️ Groq API request failed. Please check your API key or try again later."
 
 # ----------------------------
 # Tech Question Generator
 # ----------------------------
 def get_technical_questions(tech_stack):
-    prompt = f"""You are an AI recruiter. Generate 3 concise technical questions EACH for the following technologies:\n{tech_stack}."""
+    prompt = f"""You are an expert technical interviewer. For each technology listed below, generate 3 clear and concise interview questions suitable for an experienced candidate.
+
+Technologies: {tech_stack}
+
+Format:
+Technology: <name>
+1. Question
+2. Question
+3. Question
+"""
     return generate_llm_response(prompt)
 
 # ----------------------------
-# Conversation Flow Logic
+# Chat Logic
 # ----------------------------
 def chat_logic(user_input):
     info = st.session_state.candidate_info
@@ -144,7 +178,7 @@ def chat_logic(user_input):
         return "❓ Hmm, I didn’t quite get that. Could you please rephrase?"
 
 # ----------------------------
-# Show Chat Interface
+# Chat Display
 # ----------------------------
 with st.container():
     for i, msg in enumerate(st.session_state.messages):
